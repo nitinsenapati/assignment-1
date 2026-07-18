@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Linear Regression Visualizer</title>
+    <!-- Tailwind CSS for modern, clean UI layout -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Chart.js for graphing points and the regression line -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Math.js for robust mathematical array operations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <style>
+        /* Modern scrollbar handling and minor layout optimizations */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans antialiased">
+
+    <div class="max-w-7xl mx-auto px-4 py-8 lg:px-8">
+        <!-- Header -->
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold tracking-tight text-slate-900">Linear Regression Visualizer</h1>
+            <p class="text-slate-500 mt-1">Input coordinates manually, visualize the ordinary least squares (OLS) fit, and analyze metrics in real-time.</p>
+        </header>
+
+        <!-- Main Dashboard Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+            
+            <!-- Left Panel: Data Entry Control -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-900 mb-3">Add Data Point</h2>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">X Value</label>
+                            <input type="number" id="inputX" step="any" placeholder="e.g. 2" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1">Y Value</label>
+                            <input type="number" id="inputY" step="any" placeholder="e.g. 5" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:bg-white transition-all text-sm">
+                        </div>
+                    </div>
+                    <button id="btnAddPoint" class="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm shadow-sm cursor-pointer">
+                        Add Point
+                    </button>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h2 class="text-lg font-semibold text-slate-900">Data Dataset</h2>
+                        <button id="btnClear" class="text-xs text-red-500 hover:text-red-600 font-medium cursor-pointer transition-colors">Clear All</button>
+                    </div>
+                    <!-- Data points container -->
+                    <div id="pointsList" class="max-h-64 overflow-y-auto custom-scrollbar border border-slate-100 rounded-xl divide-y divide-slate-100">
+                        <!-- Dynamic content shifts here -->
+                        <div id="emptyState" class="p-6 text-center text-sm text-slate-400">No data points added yet.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Chart and Statistical Analysis output -->
+            <div class="lg:col-span-2 space-y-8">
+                
+                <!-- Chart Container -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                    <div class="h-[400px] w-full relative">
+                        <canvas id="regressionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Equation & Analytics Grid -->
+                <div id="analyticsPanel" class="opacity-40 transition-opacity duration-300 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    <!-- Formula & Coefficients Card -->
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-indigo-600 tracking-wider uppercase">Model Objective</span>
+                            <div class="text-2xl font-mono font-bold text-slate-900 my-2" id="equationDisplay">y = β₀ + β₁x</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 pt-4 border-t border-slate-100 mt-4 text-sm">
+                            <div>
+                                <span class="text-slate-400 block text-xs">Intercept (β₀)</span>
+                                <span class="font-mono font-semibold text-slate-800 text-base" id="valBeta0">-</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-xs">Slope / Coeff (β₁)</span>
+                                <span class="font-mono font-semibold text-slate-800 text-base" id="valBeta1">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error Metrics Card -->
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                        <span class="text-xs font-bold text-emerald-600 tracking-wider uppercase">Evaluation Metrics</span>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-3 mt-3">
+                            <div>
+                                <span class="text-slate-400 block text-xs font-medium">MAE</span>
+                                <span class="font-mono font-bold text-slate-800 text-lg" id="metricMAE">-</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-xs font-medium">MSE</span>
+                                <span class="font-mono font-bold text-slate-800 text-lg" id="metricMSE">-</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-xs font-medium">RMSE</span>
+                                <span class="font-mono font-bold text-slate-800 text-lg" id="metricRMSE">-</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-xs font-medium">R² Score</span>
+                                <span class="font-mono font-bold text-slate-800 text-lg" id="metricR2">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // State Management
+        let dataset = [
+            { id: 1, x: 1, y: 2.2 },
+            { id: 2, x: 2, y: 3.8 },
+            { id: 3, x: 3, y: 5.5 },
+            { id: 4, x: 4, y: 7.1 },
+            { id: 5, x: 5, y: 9.3 }
+        ];
+        let nextId = 6;
+        let chartInstance = null;
+
+        // DOM Cache
+        const inputX = document.getElementById('inputX');
+        const inputY = document.getElementById('inputY');
+        const btnAddPoint = document.getElementById('btnAddPoint');
+        const btnClear = document.getElementById('btnClear');
+        const pointsList = document.getElementById('pointsList');
+        const emptyState = document.getElementById('emptyState');
+        const analyticsPanel = document.getElementById('analyticsPanel');
+        
+        // Equation Elements
+        const equationDisplay = document.getElementById('equationDisplay');
+        const valBeta0 = document.getElementById('valBeta0');
+        const valBeta1 = document.getElementById('valBeta1');
+        
+        // Metric Elements
+        const metricMAE = document.getElementById('metricMAE');
+        const metricMSE = document.getElementById('metricMSE');
+        const metricRMSE = document.getElementById('metricRMSE');
+        const metricR2 = document.getElementById('metricR2');
+
+        // Initializer
+        window.addEventListener('DOMContentLoaded', () => {
+            initChart();
+            render();
+            
+            // Set up form submission handlers
+            btnAddPoint.addEventListener('click', handleAddPoint);
+            [inputX, inputY].forEach(input => {
+                input.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleAddPoint(); });
+            });
+            btnClear.addEventListener('click', clearDataset);
+        });
+
+        // Instantiate Chart Framework
+        function initChart() {
+            const ctx = document.getElementById('regressionChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Data Points',
+                            data: [],
+                            backgroundColor: 'rgb(79, 70, 229)',
+                            borderColor: 'rgba(79, 70, 229, 0.3)',
+                            pointRadius: 6,
+                            pointHoverRadius: 8,
+                            showLine: false
+                        },
+                        {
+                            label: 'Regression Line',
+                            data: [],
+                            type: 'line',
+                            borderColor: 'rgb(16, 185, 129)',
+                            borderWidth: 2.5,
+                            pointRadius: 0,
+                            fill: false,
+                            tension: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 12, font: { weight: 500 } } }
+                    },
+                    scales: {
+                        x: { grid: { color: '#f1f5f9' }, title: { display: true, text: 'X Axis' } },
+                        y: { grid: { color: '#f1f5f9' }, title: { display: true, text: 'Y Axis' } }
+                    }
+                }
+            });
+        }
+
+        // Action Handlers
+        function handleAddPoint() {
+            const x = parseFloat(inputX.value);
+            const y = parseFloat(inputY.value);
+
+            if (isNaN(x) || isNaN(y)) {
+                alert('Please enter valid numerical configurations for both X and Y components.');
+                return;
+            }
+
+            dataset.push({ id: nextId++, x, y });
+            inputX.value = '';
+            inputY.value = '';
+            inputX.focus();
+            
+            render();
+        }
+
+        function removePoint(id) {
+            dataset = dataset.filter(item => item.id !== id);
+            render();
+        }
+
+        function clearDataset() {
+            dataset = [];
+            render();
+        }
+
+        // Math Core: OLS Engine & Error Diagnostics
+        function computeRegression() {
+            if (dataset.length < 2) return null;
+
+            const X = dataset.map(p => p.x);
+            const Y = dataset.map(p => p.y);
+            const n = dataset.length;
+
+            // Compute OLS Parameters Matrix style via Standard Equations
+            const sumX = math.sum(X);
+            const sumY = math.sum(Y);
+            const sumXY = math.sum(dataset.map(p => p.x * p.y));
+            const sumX2 = math.sum(dataset.map(p => p.x * p.x));
+
+            const beta1 = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const beta0 = (sumY - beta1 * sumX) / n;
+
+            // Safeguard against perfectly vertical lines causing NaN
+            if (isNaN(beta1) || !isFinite(beta1)) return null;
+
+            // Statistical Aggregation
+            let totalAbsoluteError = 0;
+            let totalSquaredError = 0;
+            const meanY = sumY / n;
+            let totalSumSquares = 0; 
+
+            dataset.forEach(p => {
+                const predictedY = beta0 + (beta1 * p.x);
+                const error = p.y - predictedY;
+                
+                totalAbsoluteError += Math.abs(error);
+                totalSquaredError += error * error;
+                totalSumSquares += (p.y - meanY) * (p.y - meanY);
+            });
+
+            const mae = totalAbsoluteError / n;
+            const mse = totalSquaredError / n;
+            const rmse = Math.sqrt(mse);
+            
+            // Handle R^2 corner-case (zero variance in structural target Y)
+            const r2 = totalSumSquares === 0 ? 1 : 1 - (totalSquaredError / totalSumSquares);
+
+            return { beta0, beta1, mae, mse, rmse, r2, minX: Math.min(...X), maxX: Math.max(...X) };
+        }
+
+        // Render Pipeline UI updates
+        function render() {
+            // Update UI list entries
+            if (dataset.length === 0) {
+                emptyState.style.display = 'block';
+                // Drop operational items
+                const elementNodes = pointsList.querySelectorAll('.point-row');
+                elementNodes.forEach(node => node.remove());
+            } else {
+                emptyState.style.display = 'none';
+                
+                // Diff DOM rendering sync optimization
+                const existingRows = pointsList.querySelectorAll('.point-row');
+                const existingIds = Array.from(existingRows).map(row => parseInt(row.dataset.id));
+                const currentIds = dataset.map(p => p.id);
+
+                // Clear missing elements
+                existingRows.forEach(row => {
+                    if (!currentIds.includes(parseInt(row.dataset.id))) row.remove();
+                });
+
+                // Inject new elements
+                dataset.forEach(point => {
+                    if (!existingIds.includes(point.id)) {
+                        const div = document.createElement('div');
+                        div.className = 'point-row flex items-center justify-between p-3 hover:bg-slate-50 transition-colors text-sm';
+                        div.dataset.id = point.id;
+                        div.innerHTML = `
+                            <span class="font-mono text-slate-600">(${point.x.toFixed(2)}, ${point.y.toFixed(2)})</span>
+                            <button class="text-slate-400 hover:text-red-500 transition-colors p-1 cursor-pointer" onclick="removePoint(${point.id})">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        `;
+                        pointsList.appendChild(div);
+                    }
+                });
+            }
+
+            // Math Operations & Data Sync
+            const metrics = computeRegression();
+
+            if (metrics) {
+                analyticsPanel.classList.remove('opacity-40');
+                
+                // Update text stats
+                valBeta0.innerText = metrics.beta0.toFixed(4);
+                valBeta1.innerText = metrics.beta1.toFixed(4);
+                
+                const sign = metrics.beta1 >= 0 ? '+' : '-';
+                equationDisplay.innerText = `y = ${metrics.beta0.toFixed(2)} ${sign} ${Math.abs(metrics.beta1).toFixed(2)}x`;
+
+                metricMAE.innerText = metrics.mae.toFixed(4);
+                metricMSE.innerText = metrics.mse.toFixed(4);
+                metricRMSE.innerText = metrics.rmse.toFixed(4);
+                metricR2.innerText = metrics.r2.toFixed(4);
+
+                // Map elements down onto standard line structure
+                chartInstance.data.datasets[0].data = dataset.map(p => ({ x: p.x, y: p.y }));
+                
+                // Render trend projection boundary edge limits
+                const padding = (metrics.maxX - metrics.minX) * 0.1 || 1; 
+                const lineStartX = metrics.minX - padding;
+                const lineEndX = metrics.maxX + padding;
+
+                chartInstance.data.datasets[1].data = [
+                    { x: lineStartX, y: metrics.beta0 + metrics.beta1 * lineStartX },
+                    { x: lineEndX, y: metrics.beta0 + metrics.beta1 * lineEndX }
+                ];
+            } else {
+                // Return interface panel elements to defaults
+                analyticsPanel.classList.add('opacity-40');
+                equationDisplay.innerText = "y = β₀ + β₁x";
+                valBeta0.innerText = "-";
+                valBeta1.innerText = "-";
+                metricMAE.innerText = "-";
+                metricMSE.innerText = "-";
+                metricRMSE.innerText = "-";
+                metricR2.innerText = "-";
+
+                chartInstance.data.datasets[0].data = dataset.map(p => ({ x: p.x, y: p.y }));
+                chartInstance.data.datasets[1].data = [];
+            }
+
+            chartInstance.update();
+        }
+    </script>
+</body>
+</html>
